@@ -1,1 +1,1 @@
-# inundaciones_gdl
+# Proyecto para visualizar la distribución espacial de la inundaciones en el Área Metropolitana de Guadalajara.
