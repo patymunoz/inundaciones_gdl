@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mapa de inundaciones - Análisis Geoespacial</title>
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+
+    <!-- Leaflet MarkerCluster -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+    <!-- Bootstrap para diseño -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Chart.js para gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Heatmap -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #a8caba, #5d4157);
+            color: white;
+            padding: 20px 0;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin: 0;
+            font-weight: bold;
+        }
+
+        .header p {
+            margin: 5px 0 0;
+            font-size: 1.2rem;
+            font-style: italic;
+        }
+
+        .content {
+            padding: 20px;
+        }
+
+        .info.legend {
+            background: white;
+            padding: 10px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            font-size: 14px;
+        }
+        #loader {
+            display: none;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border: 1px solid #ccc;
+            z-index: 1000;
+        }
+        .btn-group .btn.active {
+            background-color: #5d4157 !important;
+            color: white !important;
+        }
+
+
+        .statistics-section {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .statistics-section h4 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .image-row {
+            display: flex;
+            justify-content: center;
+            gap: 20px; /* Espaciado entre imágenes */
+            margin-bottom: 20px;
+        }
+
+        .image-container {
+            width: 48%; /* Ancho de las imágenes horizontales */
+            text-align: center; /* Centrar títulos y captions */
+        }
+
+        .image-container img, .single-image-container img {
+            width: 100%; /* Las imágenes ocupan todo el ancho de su contenedor */
+            height: auto;
+            border-radius: 10px;
+            border: 2px solid #ddd;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .image-container h5, .single-image-container h5 {
+            margin-top: 10px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .image-container p, .single-image-container p {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .single-image-container {
+            width: 90%; /* Ancho de las imágenes individuales */
+            margin: 0 auto 20px; /* Centrado horizontal */
+            text-align: center;
+        }
+</style>
+</head>
+<body>
+    <header class="header">
+        <h1>Mapa de inundaciones 🌧️</h1>
+        <p>Análisis geoespacial y estadístico</p>
+    </header>
+
+    <div class="content">
+        <div class="container mt-4">
+            <div class="row">
+                <!-- Barra lateral para filtros -->
+                <div class="col-md-3">
+                    <h4>Filtros</h4>
+                    <label for="yearFilter">Filtrar por año:</label>
+                    <select id="yearFilter" class="form-select">
+                        <option value="">Todos</option>
+                    </select>
+                    <div class="btn-group mt-3" role="group" aria-label="Tipos de visualización">
+                        <button id="showMarkers" class="btn btn-secondary active">Marcadores</button>
+                        <button id="showHeatmap" class="btn btn-secondary">Mapa de calor</button>
+                        <button id="showCoropletas" class="btn btn-secondary">Coropletas</button>
+                    </div>
+                </div>
+                <!-- Sección principal con el mapa -->
+                <div class="col-md-9">
+                    <h4>Mapa</h4>
+                    <div id="map" style="height: 500px; border: 1px solid #ccc;"></div>
+                </div>
+            </div>
+            <div class="row mt-4">
+                <div class="col-md-12">
+                    <h4>Gráficos</h4>
+                    <canvas id="chartCanvas"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Estadística -->
+        {% load static %}
+        <div class="row statistics-section">
+            <div class="col-md-12">
+                <h4>Estadística</h4>
+                
+                <!-- Imágenes horizontales juntas (centradas) -->
+                <div class="image-row">
+                    <div class="image-container">
+                        <img src="{% static 'inundaciones/images/conteo_inundaciones_grafodeconexion.png' %}" alt="Grafo de conexión.">
+                        <h5>Grafo de conexión</h5>
+                        <p>Representación gráfica de la matriz de contiguidad de reina de primer orden.</p>
+                    </div>
+                    <div class="image-container">
+                        <img src="{% static 'inundaciones/images/conteo_inundaciones_graficoreinaprimerorden.png' %}" alt="Frecuencia de contiguidad.">
+                        <h5>Frecuencia de contiguidad</h5>
+                        <p>Gráfico de frecuencia basado en las relaciones de vecindad de las colonias.</p>
+                    </div>
+                </div>
+
+                <!-- I'moran -->
+                <div class="single-image-container">
+                    <img src="{% static 'inundaciones/images/conteo_inundacionesLisaScatterPlotFrame.png' %}" alt="Diagrama de dispersión del índice de Morán.">
+                    <h5>Diagrama de dispersión del índice de Moran.</h5>
+                    <p>Un valor positivo (como el mostrado, <strong>Moran's I = 0.394</strong>) sugiere una autorrelación espacial positiva, lo que significa que las áreas cercanas tienden a tener valores similares.</p>
+                </div>
+                
+                <!-- Primer mapa (centrado y ocupando todo el ancho) -->
+                <div class="single-image-container">
+                    <img src="{% static 'inundaciones/images/conteo_inundaciones_significancia.png' %}" alt="Mapa de significancia.">
+                    <h5>Mapa de significancia</h5>
+                    <p>Distribución geográfica de la significancia estadística.</p>
+                </div>
+        
+                <!-- Segundo mapa (centrado y ocupando todo el ancho) -->
+                <div class="single-image-container">
+                    <img src="{% static 'inundaciones/images/conteo_inundaciones_lisa.png' %}" alt="Mapa LISA.">
+                    <h5>Mapa LISA (Local Indicators of Spatial Association)</h5>
+                    <p>Visualización de las áreas LISA y su significancia estadística.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="loader">Cargando...</div>
+
+    <script>
+        const map = L.map('map').setView([20.6767, -103.3478], 8);
+
+        // Añadir capa base
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+            attribution: '&copy; <a href="https://www.esri.com/">Esri</a> &mdash; Esri, DeLorme, NAVTEQ',
+            maxZoom: 16
+        }).addTo(map);
+
+        let markers = null;
+        let heatLayer = null;
+        let coropletasLayer = null;
+
+        // Función para manejar clases activas en los botones
+        function setActiveButton(activeId) {
+            const buttons = document.querySelectorAll('.btn-group .btn');
+            buttons.forEach(button => {
+                if (button.id === activeId) {
+                    button.classList.add('active');
+                } else {
+                    button.classList.remove('active');
+                }
+            });
+        }
+
+        // Función para mostrar el loader
+        function showLoader(message = "Cargando...") {
+            const loader = document.getElementById('loader');
+            loader.style.display = 'block';
+            loader.innerText = message;
+        }
+
+        // Función para ocultar el loader
+        function hideLoader() {
+            const loader = document.getElementById('loader');
+            loader.style.display = 'none';
+        }
+
+        // Función para cargar datos GeoJSON y crear los marcadores
+        function loadGeoJSON(year = null) {
+            showLoader("Cargando marcadores...");
+            let url = '/inundaciones/api/';
+            if (year) {
+                url += `?anio=${year}`;
+            }
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (markers) {
+                        map.removeLayer(markers); // Quitar marcadores existentes
+                    }
+
+                    markers = L.markerClusterGroup();
+
+                    // Cargar los datos GeoJSON y asignar popups
+                    const geojsonLayer = L.geoJSON(data, {
+                        pointToLayer: (feature, latlng) => {
+                            const marker = L.circleMarker(latlng, {
+                                radius: 5,
+                                fillColor: "#0074D9",
+                                color: "#001F3F",
+                                weight: 1,
+                                opacity: 1,
+                                fillOpacity: 0.8
+                            });
+
+                            // Obtener las propiedades del marcador
+                            const { tipo, fecha, anio, video_url } = feature.properties;
+
+                            // Crear el contenido del popup
+                            const popupContent = `
+                                <strong>Tipo:</strong> ${tipo}<br>
+                                <strong>Fecha:</strong> ${fecha}<br>
+                                <strong>Año:</strong> ${anio}<br>
+                                ${video_url ? `<a href="${video_url}" target="_blank">Ver Video</a>` : '<em>Sin video disponible</em>'}
+                            `;
+
+                            // Asociar el popup al marcador
+                            marker.bindPopup(popupContent);
+                            return marker;
+                        }
+                    });
+
+                    markers.addLayer(geojsonLayer);
+                    map.addLayer(markers);
+                    map.fitBounds(markers.getBounds());
+                    hideLoader();
+                })
+                .catch(error => {
+                    console.error('Error cargando GeoJSON:', error);
+                    hideLoader();
+                });
+        }
+
+        // Función para cargar el mapa de calor
+        function loadHeatmap(year = null) {
+            showLoader("Cargando mapa de calor...");
+            let url = '/inundaciones/api/';
+            if (year) {
+                url += `?anio=${year}`;
+            }
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    const heatData = data.features.map(feature => {
+                        const [lng, lat] = feature.geometry.coordinates;
+                        return [lat, lng, 1];
+                    });
+
+                    if (heatLayer) {
+                        map.removeLayer(heatLayer);
+                    }
+
+                    heatLayer = L.heatLayer(heatData, {
+                        radius: 25,
+                        blur: 15,
+                        maxZoom: 17,
+                        gradient: {
+                            0.1: 'blue',
+                            0.4: 'lime',
+                            0.7: 'yellow',
+                            1: 'red'
+                        }
+                    });
+
+                    map.addLayer(heatLayer);
+                    hideLoader();
+                })
+                .catch(error => {
+                    console.error('Error cargando el mapa de calor:', error);
+                    hideLoader();
+                });
+        }
+
+
+        // Añadir las coropletas al mapa
+        function loadCoropletas() {
+            if (coropletasLayer) {
+                map.addLayer(coropletasLayer);
+                return;
+            }
+
+            fetch('/inundaciones/api/puntos_por_colonia/')
+                .then(response => response.json())
+                .then(data => {
+                    coropletasLayer = L.geoJson(data, {
+                        style: style,
+                        onEachFeature: function (feature, layer) {
+                            layer.bindPopup(
+                                `<strong>Colonia:</strong> ${feature.properties.nombre}<br>
+                                 <strong>Total de Puntos:</strong> ${feature.properties.total_puntos}`
+                            );
+                        }
+                    });
+                    map.addLayer(coropletasLayer);
+                    map.fitBounds(coropletasLayer.getBounds());
+                })
+                .catch(error => console.error('Error cargando coropletas:', error));
+        }
+
+        // Función para definir colores según la cantidad de puntos
+        function getColor(d) {
+            return d > 300 ? '#800026' :
+                d > 200 ? '#BD0026' :
+                d > 100 ? '#E31A1C' :
+                d > 50  ? '#FC4E2A' :
+                d > 20  ? '#FD8D3C' :
+                d > 10  ? '#FEB24C' :
+                          '#FFEDA0';
+        }
+
+        // Función para estilo de las coropletas
+        function style(feature) {
+            return {
+                fillColor: getColor(feature.properties.total_puntos),
+                weight: 2,
+                opacity: 1,
+                color: 'white',
+                dashArray: '3',
+                fillOpacity: 0.7
+            };
+        }
+
+        // Añadir la leyenda al mapa
+        const legend = L.control({ position: 'bottomright' });
+
+        legend.onAdd = function () {
+            const div = L.DomUtil.create('div', 'info legend');
+            const grades = [0, 10, 20, 50, 100, 200, 300];
+            let labels = [];
+
+            for (let i = 0; i < grades.length; i++) {
+                div.innerHTML +=
+                    '<i style="background:' + getColor(grades[i] + 1) + '"></i> ' +
+                    grades[i] + (grades[i + 1] ? '&ndash;' + grades[i + 1] + '<br>' : '+');
+            }
+
+            return div;
+        };
+
+        legend.addTo(map);
+
+        // Cargar opciones de años únicos
+        fetch('/inundaciones/api/anios/')
+            .then(response => response.json())
+            .then(anios => {
+                const yearFilter = document.getElementById('yearFilter');
+                anios.forEach(anio => {
+                    const option = document.createElement('option');
+                    option.value = anio;
+                    option.textContent = anio;
+                    yearFilter.appendChild(option);
+                });
+            })
+            .catch(error => console.error('Error cargando años:', error));
+
+        // Eventos para cambiar visualizaciones
+        document.getElementById('showMarkers').addEventListener('click', () => {
+            setActiveButton('showMarkers');
+            if (heatLayer) map.removeLayer(heatLayer);
+            if (coropletasLayer) map.removeLayer(coropletasLayer);
+            if (!markers) loadGeoJSON();
+            map.addLayer(markers);
+        });
+
+        document.getElementById('showHeatmap').addEventListener('click', () => {
+            setActiveButton('showHeatmap');
+            if (markers) map.removeLayer(markers);
+            if (coropletasLayer) map.removeLayer(coropletasLayer);
+            if (!heatLayer) loadHeatmap();
+            map.addLayer(heatLayer);
+        });
+
+        // Evento para el filtro por año
+        document.getElementById('yearFilter').addEventListener('change', (event) => {
+            const year = event.target.value;
+
+            // Actualiza las capas según la activa
+            if (map.hasLayer(markers)) {
+                loadGeoJSON(year);
+            }
+            if (map.hasLayer(heatLayer)) {
+                loadHeatmap(year);
+            }
+            if (map.hasLayer(coropletasLayer)) {
+                loadCoropletas(year);
+            }
+        });
+
+        document.getElementById('showCoropletas').addEventListener('click', () => {
+            setActiveButton('showCoropletas');
+            if (markers) map.removeLayer(markers);
+            if (heatLayer) map.removeLayer(heatLayer);
+            loadCoropletas();
+        });
+
+        // Función para cargar el gráfico
+        function loadChart(year = null) {
+            let url = '/inundaciones/api/grafico/';
+            if (year) {
+                url += `?anio=${year}`;
+            }
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    const ctx = document.getElementById('chartCanvas').getContext('2d');
+                    new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: data.labels,
+                            datasets: [{
+                                label: 'Número de inundaciones',
+                                data: data.values,
+                                backgroundColor: '#905182',
+                                borderColor: '#5d4157',
+                                borderWidth: 2
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            plugins: {
+                                legend: { position: 'top' },
+                                title: { display: true, text: 'Número de inundaciones por año' }
+                            }
+                        }
+                    });
+                })
+                .catch(error => console.error('Error cargando datos del gráfico:', error));
+        }
+
+        function loadChartByColonia() {
+        fetch('/inundaciones/api/puntos_por_colonia/')
+            .then(response => response.json())
+            .then(data => {
+                const labels = data.colonias.map(colonia => colonia.nombre);
+                const values = data.colonias.map(colonia => colonia.total_puntos);
+
+                const ctx = document.getElementById('chartCanvas').getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Cantidad de puntos por colonia',
+                            data: values,
+                            backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { display: true },
+                            title: { display: true, text: 'Puntos por colonia' }
+                        },
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+            })
+            .catch(error => console.error('Error cargando datos del gráfico:', error));
+        }
+
+        // Cargar datos iniciales
+        loadGeoJSON();
+        loadChart();
+        //loadCoropletas();
+        //loadChartByColonia();
+        heatLayer = null;
+        coropletasLayer = null;
+    </script>
+</body>
+</html>
