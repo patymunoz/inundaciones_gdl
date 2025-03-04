@@ -68,10 +68,15 @@ def mapa_view(request):
 # API to return available years
 def anios_disponibles(request):
     """
-    Retrieve and return a list of unique years with recorded flood data.
+    Devuelve todos los años únicos de VistaInundaciones, convertidos a enteros.
     """
-    anios = VistaInundaciones.objects.values_list('anio', flat=True).distinct().order_by('anio')
-    return JsonResponse(list(anios), safe=False)
+    anios = VistaInundaciones.objects.order_by().values_list('anio', flat=True).distinct()
+    
+    # Convertir Decimal a int y eliminar valores None
+    anios_limpios = [int(anio) for anio in anios if anio is not None]
+
+    return JsonResponse(anios_limpios, safe=False)
+
 
 # API to return data for charts
 def datos_grafico(request):
